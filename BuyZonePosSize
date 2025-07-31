@@ -1,0 +1,126 @@
+# Hybrid ATR-Based DCA Zones with Buy/Sell Levels and Entry Bubbles
+# Use on 1-minute chart. Zones are based on daily ATR and today's open.
+
+declare upper;
+
+input atrLength = 14;
+input atrMult1 = 1.0;
+input atrMult2 = 1.5;
+input atrMult3 = 2.0;
+input atrMult4 = 2.5;
+
+input showClouds = yes;
+input showLines = yes;
+input showBubbles = yes;
+
+# Daily ATR from higher aggregation
+def dailyHigh = high(period = AggregationPeriod.DAY);
+def dailyLow = low(period = AggregationPeriod.DAY);
+def dailyClose = close(period = AggregationPeriod.DAY);
+def dailyTR = TrueRange(dailyHigh, dailyClose, dailyLow);
+def dailyATR = Average(dailyTR, atrLength);
+
+# Capture today's opening price once per day
+def isNewDay = GetDay() != GetDay()[1];
+def dayOpen = if isNewDay then open else dayOpen[1];
+
+# BUY ZONE levels (below open)
+def buyZone1 = dayOpen - dailyATR * atrMult1;
+def buyZone2 = dayOpen - dailyATR * atrMult2;
+def buyZone3 = dayOpen - dailyATR * atrMult3;
+def buyZone4 = dayOpen - dailyATR * atrMult4;
+
+# SELL ZONE levels (above open)
+def sellZone1 = dayOpen + dailyATR * atrMult1;
+def sellZone2 = dayOpen + dailyATR * atrMult2;
+def sellZone3 = dayOpen + dailyATR * atrMult3;
+def sellZone4 = dayOpen + dailyATR * atrMult4;
+
+# Plot BUY lines
+plot BZ1 = if showLines then buyZone1 else Double.NaN;
+BZ1.SetDefaultColor(Color.BLUE);
+BZ1.SetLineWeight(2);
+
+plot BZ2 = if showLines then buyZone2 else Double.NaN;
+BZ2.SetDefaultColor(Color.GREEN);
+BZ2.SetLineWeight(2);
+
+plot BZ3 = if showLines then buyZone3 else Double.NaN;
+BZ3.SetDefaultColor(Color.ORANGE);
+BZ3.SetLineWeight(2);
+
+plot BZ4 = if showLines then buyZone4 else Double.NaN;
+BZ4.SetDefaultColor(Color.RED);
+BZ4.SetLineWeight(2);
+
+# Plot SELL lines
+plot SZ1 = if showLines then sellZone1 else Double.NaN;
+SZ1.SetDefaultColor(Color.BLUE);
+SZ1.SetLineWeight(2);
+
+plot SZ2 = if showLines then sellZone2 else Double.NaN;
+SZ2.SetDefaultColor(Color.GREEN);
+SZ2.SetLineWeight(2);
+
+plot SZ3 = if showLines then sellZone3 else Double.NaN;
+SZ3.SetDefaultColor(Color.ORANGE);
+SZ3.SetLineWeight(2);
+
+plot SZ4 = if showLines then sellZone4 else Double.NaN;
+SZ4.SetDefaultColor(Color.RED);
+SZ4.SetLineWeight(2);
+
+# BUY Clouds
+AddCloud(if showClouds then buyZone1 else Double.NaN,
+         if showClouds then buyZone2 else Double.NaN,
+         Color.LIGHT_GREEN, Color.LIGHT_GREEN);
+
+AddCloud(if showClouds then buyZone2 else Double.NaN,
+         if showClouds then buyZone3 else Double.NaN,
+         Color.YELLOW, Color.YELLOW);
+
+AddCloud(if showClouds then buyZone3 else Double.NaN,
+         if showClouds then buyZone4 else Double.NaN,
+         Color.DARK_RED, Color.DARK_RED);
+
+AddCloud(if showClouds then buyZone4 else Double.NaN,
+         Double.NaN,
+         Color.RED, Color.DARK_RED);
+
+# SELL Clouds
+AddCloud(if showClouds then sellZone2 else Double.NaN,
+         if showClouds then sellZone1 else Double.NaN,
+         Color.LIGHT_GREEN, Color.LIGHT_GREEN);
+
+AddCloud(if showClouds then sellZone3 else Double.NaN,
+         if showClouds then sellZone2 else Double.NaN,
+         Color.YELLOW, Color.YELLOW);
+
+AddCloud(if showClouds then sellZone4 else Double.NaN,
+         if showClouds then sellZone3 else Double.NaN,
+         Color.ORANGE, Color.ORANGE);
+
+AddCloud(Double.NaN,
+         if showClouds then sellZone4 else Double.NaN,
+         Color.RED, Color.DARK_RED);
+
+# Entry Bubbles when crossing into zones
+def crossedBZ1 = close crosses below buyZone1;
+def crossedBZ2 = close crosses below buyZone2;
+def crossedBZ3 = close crosses below buyZone3;
+def crossedBZ4 = close crosses below buyZone4;
+
+def crossedSZ1 = close crosses above sellZone1;
+def crossedSZ2 = close crosses above sellZone2;
+def crossedSZ3 = close crosses above sellZone3;
+def crossedSZ4 = close crosses above sellZone4;
+
+AddChartBubble(showBubbles and crossedBZ1, low, "BUY Z1", Color.BLUE, no);
+AddChartBubble(showBubbles and crossedBZ2, low, "BUY Z2", Color.GREEN, no);
+AddChartBubble(showBubbles and crossedBZ3, low, "BUY Z3", Color.ORANGE, no);
+AddChartBubble(showBubbles and crossedBZ4, low, "BUY Z4", Color.RED, no);
+
+AddChartBubble(showBubbles and crossedSZ1, high, "SELL Z1", Color.BLUE, yes);
+AddChartBubble(showBubbles and crossedSZ2, high, "SELL Z2", Color.GREEN, yes);
+AddChartBubble(showBubbles and crossedSZ3, high, "SELL Z3", Color.ORANGE, yes);
+AddChartBubble(showBubbles and crossedSZ4, high, "SELL Z4", Color.RED, yes);
