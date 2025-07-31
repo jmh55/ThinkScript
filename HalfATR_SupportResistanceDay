@@ -1,0 +1,61 @@
+declare upper;
+
+# Input for ATR length
+input atrLength = 14; 
+
+# Calculate the 14-day daily ATR
+def dailyATR = Average(TrueRange(high(period = AggregationPeriod.DAY), close(period = AggregationPeriod.DAY), low(period = AggregationPeriod.DAY)), atrLength);
+
+# Capture today's open price
+def todayOpen = open(period = AggregationPeriod.DAY);
+
+# Calculate half ATR as a constant based on the day's open
+def halfATR = if GetDay() != GetDay()[1] then dailyATR / 2 else halfATR[1];
+
+# Plot 1/2 ATR above and below today's open price
+plot ATR_High = todayOpen + halfATR;
+ATR_High.SetDefaultColor(Color.RED);
+ATR_High.SetLineWeight(2);
+ATR_High.SetStyle(Curve.SHORT_DASH);
+
+plot ATR_Low = todayOpen - halfATR;
+ATR_Low.SetDefaultColor(Color.GREEN);
+ATR_Low.SetLineWeight(2);
+ATR_Low.SetStyle(Curve.SHORT_DASH);
+
+# Plot Previous Day's High and Low
+def prevHigh = high(period = AggregationPeriod.DAY)[1];
+def prevLow = low(period = AggregationPeriod.DAY)[1];
+
+plot Prev_High = prevHigh;
+Prev_High.SetDefaultColor(Color.ORANGE);
+Prev_High.SetLineWeight(2);
+Prev_High.SetStyle(Curve.LONG_DASH);
+
+plot Prev_Low = prevLow;
+Prev_Low.SetDefaultColor(Color.MAGENTA);
+Prev_Low.SetLineWeight(2);
+Prev_Low.SetStyle(Curve.LONG_DASH);
+
+#add Label for ATR
+AddLabel(yes, "ATR: " + Round(dailyATR,2), Color.White);
+
+# Add Labels for ATR High and ATR Low
+AddLabel(yes, "ATR Hi: " + Round(ATR_High, 2), Color.RED);
+AddLabel(yes, "ATR Low: " + Round(ATR_Low, 2), Color.GREEN);
+
+# Add Labels for Previous High and Low
+AddLabel(yes, "Prev High: " + Round(prevHigh, 2), Color.ORANGE);
+AddLabel(yes, "Prev Low: " + Round(prevLow, 2), Color.MAGENTA);
+
+# Add Bubble Labels with ATR value and line value
+#AddChartBubble(barNumber() == HighestAll(barNumber()), ATR_High, "ATR: " + Round(dailyATR, 2) + " / ATR Hi: " + Round(ATR_High, 2), Color.RED, yes);
+#AddChartBubble(barNumber() == HighestAll(barNumber()), ATR_Low, "ATR: " + Round(dailyATR, 2) + " / ATR Low: " + Round(ATR_Low, 2), Color.GREEN, no);
+
+# Add Line Labels for ATR High and ATR Low
+AddChartBubble(barNumber() == HighestAll(barNumber()), ATR_High, "ATR Hi", Color.RED, yes);
+AddChartBubble(barNumber() == HighestAll(barNumber()), ATR_Low, "ATR Low", Color.GREEN, no);
+
+# Add Line Labels for Previous High and Low
+AddChartBubble(barNumber() == HighestAll(barNumber()), Prev_High, "Prev High", Color.ORANGE, yes);
+AddChartBubble(barNumber() == HighestAll(barNumber()), Prev_Low, "Prev Low", Color.MAGENTA, no);
