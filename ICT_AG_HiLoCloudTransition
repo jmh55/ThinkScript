@@ -1,0 +1,331 @@
+#--------------------------
+# ICT concepts
+# MARK - Market Structure Version 1.2
+# Inspired by code from halcyonguy 22-12-10
+# ZigZag section inspired by SleepyZ
+# Coded and altered by Chemmy
+##Changed to add_highlo_cloud high/low clouds only C Ricks 10-11-23
+## adding buy/sell arrows Jason H. 5-2-2025
+#settings
+#| **Input Name**         | **1-Min** | **2-Min** | **5-Min** | **1-Hour** | **Daily** |
+#|------------------------|-----------|-----------|-----------|------------|-----------|
+#| `revAmount`            | 0.01      | 0.015     | 0.025     | 0.05       | 0.1       |
+#| `atrreversal`          | 1.0       | 1.1       | 1.3       | 1.5        | 2.0       |
+#| `atrlength`            | 2         | 2         | 3         | 5          | 10        |
+#| `percentamount`        | 0.005     | 0.0075    | 0.01      | 0.015      | 0.02      |
+#| `major_len`            | 5         | 7         | 10        | 15         | 20        |
+#| `minor_len`            | 1         | 1         | 2         | 3          | 5         |
+#| `false_len`            | 2         | 2         | 3         | 4          | 5         |
+#| `length` *(swing HL)*  | 8         | 12        | 20        | 30         | 50        |
+#--------------------------
+# https://usethinkscript.com/
+#--------------------------
+
+def na = Double.NaN;
+def bn = BarNumber();
+def lastbn = HighestAll(if IsNaN(close) then 0 else bn);
+def lastcls = if lastbn then close else lastcls[1];
+
+#Larger ZigZag
+def bubbleoffset = .0005;
+input percentamount = .01;
+input revAmount = .05;
+input atrreversal = 1.5;
+input atrlength = 3;
+def zz = ZigZagHighLow("price h" = high, "price l" = low, "percentage reversal" = percentamount, "absolute reversal" = revAmount, "atr length" = atrlength, "atr reversal" = atrreversal);
+def reversalAmount        = if (close * percentamount / 100) > Max(revAmount < atrreversal * atrlength, revAmount) then (close * percentamount / 100) else if revAmount < atrreversal * atrlength then atrreversal * atrlength else revAmount;
+rec zzSave = if !IsNaN(zz) then zz else GetValue(zzSave, 1);
+def chg = (if zzSave == high then high else low) - GetValue(zzSave, 1);
+def isUp = chg >= 0;
+rec isConf = AbsValue(chg) >= reversalAmount or (IsNaN(GetValue(zz, 1)) and GetValue(isConf, 1));
+def zzd = if isUp then 1 else 0;
+
+#---------------------------------------------------------------------------------------------------------------------------------
+def ATRSave = if  !IsNaN(zz) then zzSave else GetValue(ATRSave, 1);
+def ATRSave1 = if  ATRSave != ATRSave[1] then ATRSave[1] else GetValue(ATRSave1, 1);
+def ATRSave2 = if  ATRSave1 != ATRSave1[1] then ATRSave1[1] else GetValue(ATRSave2, 1);
+def ATRSave3 = if  ATRSave2 != ATRSave2[1] then ATRSave2[1] else GetValue(ATRSave3, 1);
+#---------------------------------------------------------------------------------------------------------------------------------
+def ATRchg = Round(zzSave - GetValue(ATRSave, 1));
+def ATRisUp = ATRchg >= 0;
+def ATRisDown = ATRchg <= 0;
+#def Conf = AbsValue(ATRchg) >= reversalamount or (IsNaN(GetValue(ZZ, 1)) and GetValue(isConf, 1));
+def ATRDiff = ATRchg;
+
+
+# define peaks and valleys, by quantity of bars before and after them
+input major_len = 10;
+def major_offset = Min(major_len - 1, lastbn - bn);
+
+input minor_len = 2;
+def minor_offset = Min(minor_len - 1, lastbn - bn);
+#def swingLow = low < Lowest(low[1], len - 1) and low == GetValue(Lowest(low, len), -offset);
+
+
+#valley section
+#def Valley = low < Lowest(low[1], len) and low < Lowest(low[-len], len);
+def major_valley = low < Lowest(low[1], major_len - 1) and low == GetValue(Lowest(low, major_len), -major_offset);
+def major_valley_pr = if major_valley then low else na;
+#def valley_bn = if valley then bn else 0;
+def major_valley_bn = if bn == 1 then 0 else if major_valley then bn else major_valley_bn[1];
+
+#---------------------------
+#peak section
+#def Peak = high > highest(high[1], len) and high > highest(high[-len], len);
+def major_peak = high > Highest(high[1], major_len - 1) and high == GetValue(Highest(high, major_len), -major_offset);
+def major_peak_pr = if major_peak then high else na;
+#def peak_bn = if peak then bn else 0;
+def major_peak_bn = if bn == 1 then 0 else if major_peak then bn else major_peak_bn[1];
+
+ 
+# does a bar have a peak and a valley?   ignore them
+def pvskip = (major_peak and major_valley);
+
+def major_peak2 = if pvskip then 0 else major_peak;
+def major_valley2 = if pvskip then 0 else major_valley;
+
+# prev signal
+def major_prevpv = if bn == 1 then 0
+  else if major_peak2 then 1
+  else if major_valley2 then -1
+  else major_prevpv[1];
+
+# -------------------------
+
+# look ahead to next peak, if no valley in between, then ignore this current peak
+def major_peak4 = if !major_peak2 then 0
+  else
+  (fold i = 1 to 200
+   with p = 1
+   while GetValue(major_peak2, -i) == 0 and !IsNaN(GetValue(close, -i))
+   # when next peak occurs, does the prev bar show a peak signal? if so then 0, ignore current peak
+   do if (GetValue(major_peak2, -(i + 1)) == 1 and GetValue(major_prevpv, -i) == 1) then 0 else 1);
+
+# add code to fix the last peak being an error
+def major_peak5 = if major_peak2 and IsNaN(major_peak4) then 1 else major_peak4;
+#addverticalline(0 and peak5, "-", color.cyan);
+
+
+# look ahead to next valley, if no peak in between, then ignore this current valley
+def major_valley4 = if !major_valley2 then 0
+  else
+  (fold j = 1 to 200
+   with q = 1
+   while GetValue(major_valley2, -j) == 0 and !IsNaN(GetValue(close, -j))
+   # when next valley occurs, does the prev bar show a valley signal? if so then 0, ignore current valley
+   do if (GetValue(major_valley2, -(j + 1)) == 1 and GetValue(major_prevpv, -j) == -1) then 0 else 1);
+
+# add code to fix the last valley being an error
+def major_valley5 = if major_valley2 and IsNaN(major_valley4) then 1 else major_valley4;
+
+def major_p2ab = if major_peak5 then
+  (fold k2 = 1 to 100
+  with p2
+  while !IsNaN(GetValue(close, -k2))
+  do (if p2 != 0 then p2
+    else if GetValue(major_peak5, -k2) and GetValue(high, -k2) < high then (bn + k2)
+    else if GetValue(major_peak5, -k2) and GetValue(high, -k2) >= high then -1
+    else p2))
+  else major_p2ab[1];
+
+def major_peak2line = if major_p2ab > 0 and major_valley5 then low
+  else major_peak2line[1];
+
+def minor_valley = low < Lowest(low[1], minor_len - 1) and low == GetValue(Lowest(low, minor_len), -minor_offset);
+def minor_valley_pr = if minor_valley then low else na;
+#def valley_bn = if valley then bn else 0;
+def minor_valley_bn = if bn == 1 then 0 else if minor_valley then bn else minor_valley_bn[1];
+
+def minor_peak = high > Highest(high[1], minor_len - 1) and high == GetValue(Highest(high, minor_len), -minor_offset);
+def minor_peak_pr = if minor_peak then high else na;
+#def peak_bn = if peak then bn else 0;
+def minor_peak_bn = if bn == 1 then 0 else if minor_peak then bn else minor_peak_bn[1];
+
+
+def minorpvskip = (minor_peak and minor_valley);
+
+def minor_peak2 = if minorpvskip then 0 else minor_peak;
+def minor_valley2 = if minorpvskip then 0 else minor_valley;
+
+
+def minor_prevpv = if bn == 1 then 0
+  else if minor_peak2 then 1
+  else if minor_valley2 then -1
+  else minor_prevpv[1];
+
+# -------------------------
+
+# look ahead to next peak, if no valley in between, then ignore this current peak
+def minor_peak4 = if !minor_peak2 then 0
+  else
+  (fold mini = 1 to 200
+   with minp = 1
+   while GetValue(minor_peak2, -mini) == 0 and !IsNaN(GetValue(close, -mini))
+   # when next peak occurs, does the prev bar show a peak signal? if so then 0, ignore current peak
+   do if (GetValue(minor_peak2, -(mini + 1)) == 1 and GetValue(minor_prevpv, -mini) == 1) then 0 else 1);
+
+# add code to fix the last peak being an error
+def minor_peak5 = if minor_peak2 and IsNaN(minor_peak4) then 1 else minor_peak4;
+
+# look ahead to next valley, if no peak in between, then ignore this current valley
+def minor_valley4 = if !minor_valley2 then 0
+  else
+  (fold minj = 1 to 200
+   with minq = 1
+   while GetValue(minor_valley2, -minj) == 0 and !IsNaN(GetValue(close, -minj))
+   # when next valley occurs, does the prev bar show a valley signal? if so then 0, ignore current valley
+   do if (GetValue(minor_valley2, -(minj + 1)) == 1 and GetValue(minor_prevpv, -minj) == -1) then 0 else 1);
+
+# add code to fix the last valley being an error
+def minor_valley5 = if minor_valley2 and IsNaN(minor_valley4) then 1 else minor_valley4;
+
+# valley-peak-valley
+# look for next valley. is it higher than current valley?
+# then draw a horizontal line from next peak
+def minor_v2ab = if minor_valley5 then
+  (fold mink1 = 1 to 100
+  with minp1
+  while !IsNaN(GetValue(close, -mink1))
+  do (if minp1 != 0 then minp1
+    else if GetValue(minor_valley5, -mink1) and GetValue(low, -mink1) > low then (bn + mink1)
+    else if GetValue(minor_valley5, -mink1) and GetValue(low, -mink1) <= low then -1
+    else minp1))
+  else minor_v2ab[1];
+
+# -------------------------
+
+def minor_valley2line = if minor_v2ab > 0 and minor_peak5  then high
+  else minor_valley2line[1];
+
+plot minor_zv = minor_valley2line;
+
+#------------------------------
+# peak-valley-peak
+
+# look for next peak. is it lower than current peak?
+# then draw a horizontal line from next valley
+def minor_p2ab = if minor_peak5 then
+  (fold mink2 = 1 to 100
+  with minp2
+  while !IsNaN(GetValue(close, -mink2))
+  do (if minp2 != 0 then minp2
+    else if GetValue(minor_peak5, -mink2) and GetValue(high, -mink2) < high then (bn + mink2)
+    else if GetValue(minor_peak5, -mink2) and GetValue(high, -mink2) >= high then -1
+    else minp2))
+  else minor_p2ab[1];
+
+# -------------------------
+
+def minor_peak2line = if minor_p2ab > 0 and minor_valley5 then low
+  else minor_peak2line[1];
+
+plot minor_zp = minor_peak2line;
+
+
+## Testing Supply-Demand Zones
+## Signal Holds
+def minor_high_bn = if minor_peak5 then bn else minor_high_bn[1];
+def minor_low_bn = if minor_valley5 then bn else minor_low_bn[1];
+
+def minor_peak5_bn = if minor_v2ab > 0 and minor_peak5 then bn else minor_peak5_bn[1];
+def minor_valley5_bn = if minor_p2ab > 0 and minor_valley5 then bn else minor_valley5_bn[1];
+
+def minorBOSup = high crosses above minor_valley2line ;
+
+
+
+#False breaks
+input false_len = 3;
+
+
+def falseup = Sum(hlc3 >= minor_zv, false_len) >= (false_len - 1);
+def falseup_brk = falseup and bn != minor_peak5_bn and close[1] crosses below minor_zv and close < minor_zv;
+def falseup_bn = HighestAll(if falseup_brk then bn else 0);
+
+def falseup_low = if falseup_brk then Average(hlc3, false_len + 3) else falseup_low[1];
+def falseup_up = if falseup_brk then Highest(high, false_len + 2) else falseup_up[1];
+
+
+
+## Swing Highlows
+input length = 20;
+input add_highlo_cloud = yes;
+input usecharttime = yes;
+input higher_agg = AggregationPeriod.FIFTEEN_MIN;
+
+def h;
+def l;
+def c;
+
+if usecharttime
+then {
+    h = high;
+    l = low;
+    c = close;
+} else {
+    h = high(period = higher_agg);
+    l = low(period = higher_agg);
+    c = close(period = higher_agg);
+}
+
+
+def bar = BarNumber();
+def lastBar = HighestAll(if IsNaN(c) then 0 else bar);
+def offset = Min(length - 1, lastBar - bar);
+
+def swingLow = l < Lowest(l[1], length - 1) and l == GetValue(Lowest(l, length), -offset);
+def swingHigh = h > Highest(h[1], length - 1) and h == GetValue(Highest(h, length), -offset);
+# identify the very last swing low point
+def highPointOneBarNumber = HighestAll(if swingHigh then bar else 0);
+def highPointOneclose = if bar == highPointOneBarNumber then Median(c, false_len + 1) else highPointOneclose[1];
+def highPointOneValue = if bar == highPointOneBarNumber then Median(h, false_len + 1) else highPointOneValue[1];
+plot high1 = if bar < highPointOneBarNumber then Double.NaN else highPointOneValue;
+high1.Hide();
+
+plot high1cloud = if bar < highPointOneBarNumber then Double.NaN else highPointOneclose;
+high1cloud.Hide();
+AddCloud(if add_highlo_cloud then high1cloud else Double.NaN, high1, Color.RED, Color.RED);
+
+
+# identify the very last swing low point
+def lowPointOneBarNumber = HighestAll(if swingLow then bar else 0);
+def lowPointOneValue = if bar == lowPointOneBarNumber then Median(l, false_len + 1) else lowPointOneValue[1];
+plot low1 = if bar < lowPointOneBarNumber then Double.NaN else lowPointOneValue;
+low1.Hide();
+
+def lowPointOneclose = if bar == lowPointOneBarNumber then Median(c, false_len + 1) else lowPointOneclose[1];
+plot low1cloud = if bar < lowPointOneBarNumber then Double.NaN else lowPointOneclose;
+low1cloud.Hide();
+
+AddCloud(if add_highlo_cloud then low1cloud else Double.NaN, low1, Color.GREEN, Color.Green);
+
+# --- Plot Buy Arrow when Break of Structure (BOS) to upside happens ---
+plot BuyArrow = if minorBOSup then low - TickSize() * 5 else Double.NaN;
+BuyArrow.SetPaintingStrategy(PaintingStrategy.BOOLEAN_ARROW_UP);
+BuyArrow.SetDefaultColor(Color.GREEN);
+BuyArrow.SetLineWeight(2);
+
+# --- Plot Sell Arrow when False Breakout happens ---
+plot SellArrow = if falseup_brk then high + TickSize() * 5 else Double.NaN;
+SellArrow.SetPaintingStrategy(PaintingStrategy.BOOLEAN_ARROW_DOWN);
+SellArrow.SetDefaultColor(Color.RED);
+SellArrow.SetLineWeight(2);
+
+
+# --- Plot Buy Arrow and Bubble when Break of Structure (BOS) to upside happens ---
+plot BuyArrow1 = if minorBOSup then low - TickSize() * 5 else Double.NaN;
+BuyArrow1.SetPaintingStrategy(PaintingStrategy.BOOLEAN_ARROW_UP);
+BuyArrow1.SetDefaultColor(Color.GREEN);
+BuyArrow1.SetLineWeight(2);
+
+#AddChartBubble(    minorBOSup,    low - TickSize() * 8,    "++",    Color.GREEN,    no);
+
+# --- Plot Sell Arrow and Bubble when False Breakout happens ---
+plot SellArrow1 = if falseup_brk then high + TickSize() * 5 else Double.NaN;
+SellArrow1.SetPaintingStrategy(PaintingStrategy.BOOLEAN_ARROW_DOWN);
+SellArrow1.SetDefaultColor(Color.RED);
+SellArrow1.SetLineWeight(2);
+
+#AddChartBubble(    falseup_brk,    high + TickSize() * 8,    "--",    Color.RED,    yes);
+
+## END CODE
