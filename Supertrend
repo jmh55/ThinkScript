@@ -1,0 +1,68 @@
+input AtrMult = 1.00;
+input nATR = 6;
+input AvgType = AverageType.HULL;
+input PaintBars = yes;
+input ShowBubbles = yes;
+input ShowLabels = yes;
+input UseEmaCross = yes;
+input EMA1 = 10;
+input EMA2 = 20;
+
+def ATR = ATR("length" = nATR, "average type" = AvgType);
+def UP_Band_Basic = HL2 + (AtrMult * ATR);
+def LW_Band_Basic = HL2 + (-AtrMult * ATR);
+def UP_Band = if ((UP_Band_Basic < UP_Band[1]) or (close[1] > UP_Band[1])) then UP_Band_Basic else UP_Band[1];
+def LW_Band = if ((LW_Band_Basic > LW_Band[1]) or (close[1] < LW_Band[1])) then LW_Band_Basic else LW_Band[1];
+
+def ST = if ((ST[1] == UP_Band[1]) and (close < UP_Band)) then UP_Band
+else if ((ST[1] == UP_Band[1]) and (close > Up_Band)) then LW_Band
+else if ((ST[1] == LW_Band[1]) and (close > LW_Band)) then LW_Band
+else if ((ST[1] == LW_Band) and (close < LW_Band)) then UP_Band
+else LW_Band;
+
+def EMA1Val = MovAvgExponential(close, EMA1);
+def EMA2Val = MovAvgExponential(close, EMA2);
+def EMADirection = if EMA1Val > EMA2Val then 1 else if EMA1Val < EMA2Val then -1 else 0;
+
+plot Long = if close > ST then ST else Double.NaN;
+Long.AssignValueColor(Color.GREEN);
+Long.SetLineWeight(2);
+
+plot Short = if close < ST then ST else Double.NaN;
+Short.AssignValueColor(Color.RED);
+Short.SetLineWeight(3);
+
+def LongTrigger = isNaN(Long[1]) and !isNaN(Long);
+def ShortTrigger = isNaN(Short[1]) and !isNaN(Short);
+
+plot LongDot = if LongTrigger then ST else Double.NaN;
+LongDot.SetPaintingStrategy(PaintingStrategy.POINTS);
+LongDot.AssignValueColor(Color.GREEN);
+LongDot.SetLineWeight(4);
+
+plot ShortDot = if ShortTrigger then ST else Double.NaN;
+ShortDot.SetPaintingStrategy(PaintingStrategy.POINTS);
+ShortDot.AssignValueColor(Color.RED);
+ShortDot.SetLineWeight(4);
+
+def LongConfirm = (UseEmaCross and close > ST and EMADirection == 1) or (!UseEmaCross and LongTrigger);
+def ShortConfirm = (UseEmaCross and close < ST and EMADirection == -1) or (!UseEmaCross and ShortTrigger);
+
+def LongAlert = LongConfirm and LongConfirm[1] != LongConfirm;
+def ShortAlert = ShortConfirm and ShortConfirm[1] != ShortConfirm;
+
+AddLabel(ShowLabels, "ST: " + (if close > ST then "Bullish" else if close < ST then "Bearish" else "Neutral"),
+                              if close > ST then Color.GREEN else if close < ST then Color.RED else Color.GRAY);
+AddLabel(ShowLabels and UseEmaCross, "EMA: " + (if EMADirection == 1 then "Bullish" else if EMADirection == -1 then "Bearish" else "Neutral"),
+                              if EMADirection == 1 then Color.GREEN else if EMADirection == -1 then Color.RED else Color.GRAY);
+
+AddChartBubble(ShowBubbles and LongAlert, ST, "BUY", Color.GREEN, no);
+AddChartBubble(ShowBubbles and ShortAlert, ST, "SELL", Color.RED, yes);
+
+AssignPriceColor(if PaintBars and close < ST and (!UseEmaCross or EMADirection == -1) then Color.RED
+                 else if PaintBars and close > ST and (!UseEmaCross or EMADirection == 1) then Color.GREEN
+                 else if PaintBars then Color.GRAY
+                 else Color.CURRENT);
+
+Alert(LongAlert, "Long", Alert.BAR, Sound.Ding);
+Alert(ShortAlert, "Short", Alert.BAR, Sound.Ding);
